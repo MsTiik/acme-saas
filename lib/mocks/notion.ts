@@ -1,3 +1,11 @@
+export const notionConfig = {
+  workspaceId: "notion_ws_acme_4q8r",
+  connectedUser: "Sam Kim",
+  connectedEmail: "sam@acme.co",
+  lastSyncAt: "2026-04-25T08:15:00Z",
+  apiKeyPrefix: "notion_api_••••",
+};
+
 export const notionPages = [
   {
     id: "page_001",

@@ -1,3 +1,11 @@
+export const intercomConfig = {
+  workspaceId: "acme_ic_ws_7x3p9",
+  connectedUser: "Jamie Lee",
+  connectedEmail: "jamie@acme.co",
+  lastSyncAt: "2026-04-25T09:30:00Z",
+  apiKeyPrefix: "ic_api_••••",
+};
+
 export const intercomUsers = [
   { id: "usr_001", name: "Jamie Lee", email: "jamie@acme.co", role: "admin", lastSeenAt: "2026-04-24T10:00:00Z" },
   { id: "usr_002", name: "Sam Kim", email: "sam@acme.co", role: "member", lastSeenAt: "2026-04-23T16:45:00Z" },
