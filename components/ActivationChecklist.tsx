@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
@@ -14,8 +14,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trackEvent } from "@/lib/acme-events";
+import { intercomUsers } from "@/lib/mocks/intercom";
+import { notionPages, notionWorkspace } from "@/lib/mocks/notion";
 
-const steps = [
+interface Step {
+  id: number;
+  title: string;
+  description: string;
+  action: string;
+}
+
+const baseSteps: Step[] = [
   {
     id: 1,
     title: "Invite your team",
@@ -54,20 +63,82 @@ const steps = [
   },
 ];
 
-export default function ActivationChecklist() {
+const enterpriseSteps: Step[] = [
+  {
+    id: 7,
+    title: "Bulk invite employees",
+    description:
+      "Upload a CSV or connect your directory to add users at scale. Invite links are valid for 30 days.",
+    action: "Upload CSV",
+  },
+  {
+    id: 8,
+    title: "Verify Intercom user tracking",
+    description:
+      "Ensure user_signed_up events are firing for each new employee added to the workspace.",
+    action: "Verify",
+  },
+  {
+    id: 9,
+    title: "Link Notion customer-activities workspace",
+    description:
+      "Connect your Notion workspace to log onboarding milestones and progress automatically.",
+    action: "Connect",
+  },
+];
+
+function logNotionActivity(activity: string) {
+  trackEvent("notion.customer_activities.log", {
+    workspaceId: notionWorkspace.id,
+    workspaceName: notionWorkspace.name,
+    activity,
+    pagesTracked: notionPages.length,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+function trackIntercomSignup(userId: string) {
+  const user = intercomUsers.find((u) => u.id === userId);
+  trackEvent("intercom.user_signed_up", {
+    userId,
+    email: user?.email ?? "unknown",
+    role: user?.role ?? "member",
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export default function ActivationChecklist({
+  enterpriseEnabled = false,
+}: {
+  enterpriseEnabled?: boolean;
+}) {
+  const steps = enterpriseEnabled ? [...baseSteps, ...enterpriseSteps] : baseSteps;
   const [checked, setChecked] = useState<Record<number, boolean>>({ 1: true, 2: true });
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const completedCount = Object.values(checked).filter(Boolean).length;
   const pct = Math.round((completedCount / steps.length) * 100);
 
-  function toggle(id: number) {
-    setChecked((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      trackEvent("onboarding_step_toggled", { step: id, checked: next[id] });
-      return next;
-    });
-  }
+  const toggle = useCallback(
+    (id: number) => {
+      const isCompleting = !checked[id];
+
+      setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+
+      trackEvent("onboarding_step_toggled", { step: id, checked: isCompleting });
+
+      if (isCompleting && enterpriseEnabled) {
+        logNotionActivity(`Checklist step completed: step_${id}`);
+
+        if (id === 7) {
+          for (const user of intercomUsers) {
+            trackIntercomSignup(user.id);
+          }
+        }
+      }
+    },
+    [checked, enterpriseEnabled],
+  );
 
   return (
     <div className="mt-4 space-y-4">
