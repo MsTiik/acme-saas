@@ -1,7 +1,10 @@
 {
   "version": "1",
-  "generatedAt": "2026-04-25T15:44:25.750Z",
+  "generatedAt": "2026-04-26T03:17:59.914Z",
   "changes": {
+    "activity-hero": {
+      "id": "activity-hero"
+    },
     "app-main": {
       "id": "app-main"
     },
@@ -50,6 +53,9 @@
     "integrations-hero": {
       "id": "integrations-hero"
     },
+    "onboarding-api-docs": {
+      "id": "onboarding-api-docs"
+    },
     "onboarding-checklist": {
       "id": "onboarding-checklist"
     },
@@ -64,6 +70,12 @@
     },
     "onboarding-video": {
       "id": "onboarding-video"
+    },
+    "onboarding-webhook-status": {
+      "id": "onboarding-webhook-status"
+    },
+    "projects-hero": {
+      "id": "projects-hero"
     },
     "settings-api": {
       "id": "settings-api"
