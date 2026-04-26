@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils";
 import { mockActivityFeed } from "@/lib/mocks/team";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Save } from "lucide-react";
 import { DashboardDialogs } from "@/components/DashboardDialogs";
+import { notionConfig } from "@/lib/mocks/notion";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -147,7 +148,42 @@ function RevenueChart() {
   );
 }
 
-export default function DashboardPage() {
+async function isFeatureEnabled(flag: string): Promise<boolean> {
+  return process.env[`FF_${flag.toUpperCase()}`] === "true";
+}
+
+async function saveFilterToNotion(formData: FormData) {
+  "use server";
+
+  const filterState = formData.get("filterState");
+  if (typeof filterState !== "string") return;
+
+  let filters: unknown;
+  try {
+    filters = JSON.parse(filterState);
+  } catch {
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+
+  const note = {
+    parent: { database_id: "customer-activities" },
+    properties: {
+      title: `Dashboard filter snapshot – ${new Date().toLocaleDateString()}`,
+      filters,
+      workspace: notionConfig.workspaceId,
+      createdAt: timestamp,
+      createdBy: notionConfig.connectedEmail,
+    },
+  };
+
+  console.log("[Notion] Saved filter view:", JSON.stringify(note));
+}
+
+export default async function DashboardPage() {
+  const notionFilterSave = await isFeatureEnabled("notion_filter_save_minimal");
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
       {/* Hero */}
@@ -157,7 +193,26 @@ export default function DashboardPage() {
             <h1 className="font-serif text-3xl tracking-tight leading-tight">Good morning, Jamie</h1>
             <p className="mt-1 text-sm text-muted-foreground">{DEMO_DATE}</p>
           </div>
-          <DashboardDialogs />
+          <div className="flex items-center gap-2">
+            {notionFilterSave && (
+              <form action={saveFilterToNotion}>
+                <input
+                  type="hidden"
+                  name="filterState"
+                  value={JSON.stringify({
+                    view: "dashboard",
+                    kpis: kpis.map((k) => k.label),
+                    date: DEMO_DATE,
+                  })}
+                />
+                <Button type="submit" variant="outline" size="sm">
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                  Save to Notion
+                </Button>
+              </form>
+            )}
+            <DashboardDialogs />
+          </div>
         </div>
       </ProbeTracked>
 
