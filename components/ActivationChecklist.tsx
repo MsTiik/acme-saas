@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +16,16 @@ import { Label } from "@/components/ui/label";
 import { trackEvent } from "@/lib/acme-events";
 import { intercomUsers } from "@/lib/mocks/intercom";
 import { notionPages, notionWorkspace } from "@/lib/mocks/notion";
+import {
+  ArrowUp,
+  ArrowDown,
+  LayoutGrid,
+  LayoutList,
+  Eye,
+  EyeOff,
+  Settings2,
+  RotateCcw,
+} from "lucide-react";
 
 interface Step {
   id: number;
@@ -87,6 +97,12 @@ const enterpriseSteps: Step[] = [
   },
 ];
 
+type WidgetLayout = "list" | "grid";
+
+async function isFeatureEnabled(_flag: string): Promise<boolean> {
+  return process.env.NEXT_PUBLIC_FF_WIDGET_CUSTOMIZATION_ENABLED === "true";
+}
+
 function logNotionActivity(activity: string) {
   trackEvent("notion.customer_activities.log", {
     workspaceId: notionWorkspace.id,
@@ -112,12 +128,48 @@ export default function ActivationChecklist({
 }: {
   enterpriseEnabled?: boolean;
 }) {
-  const steps = enterpriseEnabled ? [...baseSteps, ...enterpriseSteps] : baseSteps;
+  const defaultSteps = enterpriseEnabled
+    ? [...baseSteps, ...enterpriseSteps]
+    : baseSteps;
+
   const [checked, setChecked] = useState<Record<number, boolean>>({ 1: true, 2: true });
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  // --- Widget customization state (gated by feature flag) ---
+  const [widgetCustomizationEnabled, setWidgetCustomizationEnabled] =
+    useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [layout, setLayout] = useState<WidgetLayout>("list");
+  const [stepOrder, setStepOrder] = useState<number[]>(() =>
+    defaultSteps.map((s) => s.id),
+  );
+  const [hiddenSteps, setHiddenSteps] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    isFeatureEnabled("widget_customization_enabled").then((enabled) => {
+      if (!cancelled) setWidgetCustomizationEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Keep stepOrder in sync when enterprise mode changes the step list.
+  useEffect(() => {
+    setStepOrder(defaultSteps.map((s) => s.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enterpriseEnabled]);
+
+  const stepById = new Map(defaultSteps.map((s) => [s.id, s]));
+
+  const visibleSteps: Step[] = stepOrder
+    .filter((id) => !hiddenSteps.has(id))
+    .map((id) => stepById.get(id))
+    .filter((s): s is Step => s !== undefined);
+
   const completedCount = Object.values(checked).filter(Boolean).length;
-  const pct = Math.round((completedCount / steps.length) * 100);
+  const pct = Math.round((completedCount / defaultSteps.length) * 100);
 
   const toggle = useCallback(
     (id: number) => {
@@ -140,51 +192,229 @@ export default function ActivationChecklist({
     [checked, enterpriseEnabled],
   );
 
+  // --- Customization handlers ---
+  const moveStep = useCallback(
+    (stepId: number, direction: "up" | "down") => {
+      setStepOrder((prev) => {
+        const idx = prev.indexOf(stepId);
+        if (idx === -1) return prev;
+        const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= prev.length) return prev;
+        const next = [...prev];
+        [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+        return next;
+      });
+      trackEvent("widget_customization_reorder", {
+        stepId,
+        direction,
+      });
+    },
+    [],
+  );
+
+  const toggleVisibility = useCallback((stepId: number) => {
+    const wasHidden = hiddenSteps.has(stepId);
+    setHiddenSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(stepId)) {
+        next.delete(stepId);
+      } else {
+        next.add(stepId);
+      }
+      return next;
+    });
+    trackEvent(
+      wasHidden ? "widget_customization_show" : "widget_customization_hide",
+      { stepId },
+    );
+  }, [hiddenSteps]);
+
+  const resetCustomization = useCallback(() => {
+    setStepOrder(defaultSteps.map((s) => s.id));
+    setHiddenSteps(new Set());
+    setLayout("list");
+    trackEvent("widget_customization_reset", {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enterpriseEnabled]);
+
+  const toggleLayout = useCallback(() => {
+    const next = layout === "list" ? "grid" : "list";
+    setLayout(next);
+    trackEvent("widget_customization_layout_change", { layout: next });
+  }, [layout]);
+
+  // --- Render helpers ---
+  function renderStepCard(step: Step) {
+    const isGrid = widgetCustomizationEnabled && layout === "grid";
+    return (
+      <div
+        key={step.id}
+        className={
+          isGrid
+            ? "flex flex-col gap-2 p-3 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+            : "flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+        }
+      >
+        <div className={isGrid ? "flex items-start gap-3" : "contents"}>
+          <Checkbox
+            id={`step-${step.id}`}
+            checked={!!checked[step.id]}
+            onCheckedChange={() => toggle(step.id)}
+            className="mt-0.5"
+          />
+          <div className="flex-1 min-w-0">
+            <label
+              htmlFor={`step-${step.id}`}
+              className={`text-sm font-medium cursor-pointer ${checked[step.id] ? "line-through text-muted-foreground" : ""}`}
+            >
+              {step.title}
+            </label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {step.description}
+            </p>
+          </div>
+        </div>
+        {!checked[step.id] && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 text-xs h-7"
+            onClick={() =>
+              step.id === 1 ? setInviteOpen(true) : toggle(step.id)
+            }
+          >
+            {step.action}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 space-y-4">
       {/* Progress */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{completedCount} of {steps.length} complete</span>
+          <span>
+            {completedCount} of {defaultSteps.length} complete
+          </span>
           <span>{pct}%</span>
         </div>
         <Progress value={pct} className="h-1.5" />
       </div>
 
-      {/* Steps */}
-      <div className="space-y-2">
-        {steps.map((step) => (
-          <div
-            key={step.id}
-            className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+      {/* Widget Customization Toolbar — gated behind feature flag */}
+      {widgetCustomizationEnabled && (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={customizeOpen ? "default" : "outline"}
+            className="text-xs h-7 gap-1.5"
+            onClick={() => {
+              setCustomizeOpen((prev) => !prev);
+              trackEvent("widget_customization_toggle_panel", {
+                open: !customizeOpen,
+              });
+            }}
           >
-            <Checkbox
-              id={`step-${step.id}`}
-              checked={!!checked[step.id]}
-              onCheckedChange={() => toggle(step.id)}
-              className="mt-0.5"
-            />
-            <div className="flex-1 min-w-0">
-              <label
-                htmlFor={`step-${step.id}`}
-                className={`text-sm font-medium cursor-pointer ${checked[step.id] ? "line-through text-muted-foreground" : ""}`}
-              >
-                {step.title}
-              </label>
-              <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
-            </div>
-            {!checked[step.id] && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="shrink-0 text-xs h-7"
-                onClick={() => step.id === 1 ? setInviteOpen(true) : toggle(step.id)}
-              >
-                {step.action}
-              </Button>
+            <Settings2 className="h-3.5 w-3.5" />
+            Customize
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-7 gap-1.5"
+            onClick={toggleLayout}
+            title={layout === "list" ? "Switch to grid" : "Switch to list"}
+          >
+            {layout === "list" ? (
+              <LayoutGrid className="h-3.5 w-3.5" />
+            ) : (
+              <LayoutList className="h-3.5 w-3.5" />
             )}
-          </div>
-        ))}
+            {layout === "list" ? "Grid" : "List"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs h-7 gap-1.5 ml-auto"
+            onClick={resetCustomization}
+            title="Reset to defaults"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset
+          </Button>
+        </div>
+      )}
+
+      {/* Customization Panel */}
+      {widgetCustomizationEnabled && customizeOpen && (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            Reorder or hide widgets
+          </p>
+          {stepOrder.map((id, idx) => {
+            const step = stepById.get(id);
+            if (!step) return null;
+            const isHidden = hiddenSteps.has(id);
+            return (
+              <div
+                key={id}
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${isHidden ? "opacity-50" : ""}`}
+              >
+                <div className="flex gap-0.5">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    disabled={idx === 0}
+                    onClick={() => moveStep(id, "up")}
+                    aria-label={`Move ${step.title} up`}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    disabled={idx === stepOrder.length - 1}
+                    onClick={() => moveStep(id, "down")}
+                    aria-label={`Move ${step.title} down`}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <span className="flex-1 truncate">{step.title}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => toggleVisibility(id)}
+                  aria-label={
+                    isHidden ? `Show ${step.title}` : `Hide ${step.title}`
+                  }
+                >
+                  {isHidden ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Steps */}
+      <div
+        className={
+          widgetCustomizationEnabled && layout === "grid"
+            ? "grid grid-cols-2 gap-2"
+            : "space-y-2"
+        }
+      >
+        {visibleSteps.map((step) => renderStepCard(step))}
       </div>
 
       {/* Invite Dialog */}
@@ -196,12 +426,25 @@ export default function ActivationChecklist({
           <div className="space-y-3 py-2">
             <div className="space-y-2">
               <Label htmlFor="inv-email">Email address</Label>
-              <Input id="inv-email" placeholder="colleague@company.com" type="email" />
+              <Input
+                id="inv-email"
+                placeholder="colleague@company.com"
+                type="email"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-            <Button onClick={() => { setInviteOpen(false); toggle(1); }}>Send invite</Button>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setInviteOpen(false);
+                toggle(1);
+              }}
+            >
+              Send invite
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
