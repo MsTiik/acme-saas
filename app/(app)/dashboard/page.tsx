@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils";
 import { mockActivityFeed } from "@/lib/mocks/team";
-import { ArrowUpRight, Save } from "lucide-react";
+import { ArrowUpRight, Save, AlertTriangle } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { stripeCustomer } from "@/lib/mocks/stripe";
 import { DashboardDialogs } from "@/components/DashboardDialogs";
 import { notionConfig } from "@/lib/mocks/notion";
 import {
@@ -217,12 +219,88 @@ async function saveFilterToNotion(formData: FormData) {
   console.log("[Notion] Saved filter view:", JSON.stringify(note));
 }
 
+const PLAN_LIMIT_WARN_PCT = 70;
+const PLAN_LIMIT_CRITICAL_PCT = 90;
+
+interface UsageMetric {
+  label: string;
+  used: number;
+  limit: number;
+  unit: string;
+}
+
+function getPlanLimitAlerts(): UsageMetric[] {
+  const { seats, apiCalls, storage } = stripeCustomer;
+  const metrics: UsageMetric[] = [
+    { label: "Seats", used: seats.used, limit: seats.limit, unit: "seats" },
+    { label: "API calls", used: apiCalls.used, limit: apiCalls.limit, unit: "calls" },
+    { label: "Storage", used: storage.usedGb, limit: storage.limitGb, unit: "GB" },
+  ];
+  return metrics.filter(
+    (m) => Math.round((m.used / m.limit) * 100) >= PLAN_LIMIT_WARN_PCT
+  );
+}
+
+function fmtUsage(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+  return String(n);
+}
+
+function PlanLimitAlerts({ alerts }: { alerts: UsageMetric[] }) {
+  if (alerts.length === 0) return null;
+  return (
+    <ProbeTracked changeId="dashboard-plan-alerts">
+      <div className="space-y-3">
+        {alerts.map((metric) => {
+          const pct = Math.round((metric.used / metric.limit) * 100);
+          const critical = pct >= PLAN_LIMIT_CRITICAL_PCT;
+          return (
+            <Alert
+              key={metric.label}
+              variant={critical ? "destructive" : "default"}
+              className={critical
+                ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40"
+                : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+              }
+            >
+              <AlertTriangle className={`h-4 w-4 ${
+                critical
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-amber-600 dark:text-amber-400"
+              }`} />
+              <AlertTitle className={critical
+                ? "text-red-800 dark:text-red-300"
+                : "text-amber-800 dark:text-amber-300"
+              }>
+                {metric.label}: {pct}% of plan limit used
+              </AlertTitle>
+              <AlertDescription className={critical
+                ? "text-red-700 dark:text-red-400"
+                : "text-amber-700 dark:text-amber-400"
+              }>
+                You&apos;ve used {fmtUsage(metric.used)} of {fmtUsage(metric.limit)} {metric.unit} on your{" "}
+                {stripeCustomer.planLabel} plan.{" "}
+                {critical
+                  ? "You're about to hit your limit — upgrade now to avoid disruption."
+                  : "Consider upgrading before you reach the cap."}
+              </AlertDescription>
+            </Alert>
+          );
+        })}
+      </div>
+    </ProbeTracked>
+  );
+}
+
 export default async function DashboardPage() {
   const notionFilterSave = await isFeatureEnabled("notion_filter_save_minimal");
   const tooltipOverlay = await isFeatureEnabled("dashboard_tooltip_overlay");
   const termDefinitions = tooltipOverlay
     ? await fetchNotionTermDefinitions()
     : {};
+  const pricingAlertsEnabled = await isFeatureEnabled("feature_specific_pricing_alerts");
+  const planAlerts = pricingAlertsEnabled ? getPlanLimitAlerts() : [];
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
@@ -255,6 +333,9 @@ export default async function DashboardPage() {
           </div>
         </div>
       </ProbeTracked>
+
+      {/* Plan Limit Alerts */}
+      {pricingAlertsEnabled && <PlanLimitAlerts alerts={planAlerts} />}
 
       {/* KPI Strip */}
       <ProbeTracked changeId="dashboard-kpis">
