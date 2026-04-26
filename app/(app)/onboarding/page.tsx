@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ProbeTracked } from "@/components/ProbeTracked";
 import ActivationChecklist from "@/components/ActivationChecklist";
 import WelcomeVideo from "@/components/WelcomeVideo";
@@ -14,6 +15,9 @@ export default async function OnboardingPage() {
   const enterpriseOnboarding = await isFeatureEnabled(
     "enterprise_onboarding_optimization",
   );
+  const quickDashboardAccess = await isFeatureEnabled(
+    "quick_dashboard_access",
+  );
 
   return (
     <ProbeTracked changeId="onboarding-root">
@@ -24,6 +28,14 @@ export default async function OnboardingPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               Complete the steps below to get your workspace set up and your team onboarded.
             </p>
+            {quickDashboardAccess && (
+              <Link
+                href="/dashboard"
+                className="mt-3 inline-block text-sm font-medium text-[var(--primary)] underline underline-offset-4 hover:opacity-80"
+              >
+                Skip to Dashboard
+              </Link>
+            )}
             {enterpriseOnboarding && (
               <div className="mt-4 rounded-xl border border-border bg-[oklch(0.42_0.08_175/0.06)] p-4">
                 <p className="text-sm font-medium text-[var(--primary)]">
