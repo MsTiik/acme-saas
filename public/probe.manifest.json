@@ -1,0 +1,87 @@
+{
+  "version": "1",
+  "generatedAt": "2026-04-25T15:44:25.750Z",
+  "changes": {
+    "app-main": {
+      "id": "app-main"
+    },
+    "billing-hero": {
+      "id": "billing-hero"
+    },
+    "billing-invoices": {
+      "id": "billing-invoices"
+    },
+    "billing-plan": {
+      "id": "billing-plan"
+    },
+    "billing-upsell": {
+      "id": "billing-upsell"
+    },
+    "billing-usage": {
+      "id": "billing-usage"
+    },
+    "customers-header-actions": {
+      "id": "customers-header-actions"
+    },
+    "customers-hero": {
+      "id": "customers-hero"
+    },
+    "customers-table": {
+      "id": "customers-table"
+    },
+    "dashboard-activity": {
+      "id": "dashboard-activity"
+    },
+    "dashboard-hero": {
+      "id": "dashboard-hero"
+    },
+    "dashboard-kpis": {
+      "id": "dashboard-kpis"
+    },
+    "dashboard-upsell": {
+      "id": "dashboard-upsell"
+    },
+    "integrations-available": {
+      "id": "integrations-available"
+    },
+    "integrations-connected": {
+      "id": "integrations-connected"
+    },
+    "integrations-hero": {
+      "id": "integrations-hero"
+    },
+    "onboarding-checklist": {
+      "id": "onboarding-checklist"
+    },
+    "onboarding-hero": {
+      "id": "onboarding-hero"
+    },
+    "onboarding-root": {
+      "id": "onboarding-root"
+    },
+    "onboarding-tour": {
+      "id": "onboarding-tour"
+    },
+    "onboarding-video": {
+      "id": "onboarding-video"
+    },
+    "settings-api": {
+      "id": "settings-api"
+    },
+    "settings-billing": {
+      "id": "settings-billing"
+    },
+    "settings-general": {
+      "id": "settings-general"
+    },
+    "settings-hero": {
+      "id": "settings-hero"
+    },
+    "settings-members": {
+      "id": "settings-members"
+    },
+    "settings-notifications": {
+      "id": "settings-notifications"
+    }
+  }
+}
