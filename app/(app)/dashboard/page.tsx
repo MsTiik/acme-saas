@@ -155,14 +155,23 @@ async function isFeatureEnabled(flag: string): Promise<boolean> {
 async function saveFilterToNotion(formData: FormData) {
   "use server";
 
-  const filterState = formData.get("filterState") as string;
+  const filterState = formData.get("filterState");
+  if (typeof filterState !== "string") return;
+
+  let filters: unknown;
+  try {
+    filters = JSON.parse(filterState);
+  } catch {
+    return;
+  }
+
   const timestamp = new Date().toISOString();
 
   const note = {
     parent: { database_id: "customer-activities" },
     properties: {
       title: `Dashboard filter snapshot – ${new Date().toLocaleDateString()}`,
-      filters: JSON.parse(filterState),
+      filters,
       workspace: notionConfig.workspaceId,
       createdAt: timestamp,
       createdBy: notionConfig.connectedEmail,
