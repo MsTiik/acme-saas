@@ -4,6 +4,7 @@ import ActivationChecklist from "@/components/ActivationChecklist";
 import WelcomeVideo from "@/components/WelcomeVideo";
 import ProductTour from "@/components/ProductTour";
 import {
+  AcmeEventError,
   trackIntercomEvent,
   reportError,
   registerWebhook,
@@ -13,12 +14,17 @@ import { AlertTriangle, CheckCircle2, Webhook, FileText } from "lucide-react";
 
 export const metadata: Metadata = { title: "Onboarding" };
 
+let _trialCache: { trialEndsAt: string } | null = null;
+let _webhookCache: WebhookRegistrationResult | null | undefined;
+
 async function isFeatureEnabled(flag: string): Promise<boolean> {
   return process.env[`FF_${flag.toUpperCase()}`] === "true";
 }
 
-/** Fire the `trial_started` Intercom event and return trial metadata. */
+/** Fire the `trial_started` Intercom event once per server lifecycle. */
 function emitTrialStarted(): { trialEndsAt: string } {
+  if (_trialCache) return _trialCache;
+
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + 14);
   const trialEndsAt = trialEnd.toISOString();
@@ -28,13 +34,16 @@ function emitTrialStarted(): { trialEndsAt: string } {
     source: "onboarding_page",
   });
 
-  return { trialEndsAt };
+  _trialCache = { trialEndsAt };
+  return _trialCache;
 }
 
-/** Attempt to register the onboarding webhook; return null on failure. */
+/** Attempt to register the onboarding webhook once; return null on failure. */
 function tryRegisterWebhook(): WebhookRegistrationResult | null {
+  if (_webhookCache !== undefined) return _webhookCache;
+
   try {
-    return registerWebhook({
+    _webhookCache = registerWebhook({
       url: "https://hooks.acme.co/onboarding",
       events: [
         "trial_started",
@@ -42,12 +51,16 @@ function tryRegisterWebhook(): WebhookRegistrationResult | null {
         "onboarding_completed",
       ],
     });
+    return _webhookCache;
   } catch (err) {
-    reportError(
-      "Failed to register onboarding webhook",
-      "ONBOARDING_WEBHOOK_FAILED",
-      { originalError: err instanceof Error ? err.message : String(err) },
-    );
+    if (!(err instanceof AcmeEventError)) {
+      reportError(
+        "Failed to register onboarding webhook",
+        "ONBOARDING_WEBHOOK_FAILED",
+        { originalError: err instanceof Error ? err.message : String(err) },
+      );
+    }
+    _webhookCache = null;
     return null;
   }
 }
