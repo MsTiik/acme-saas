@@ -8,6 +8,12 @@ import { mockActivityFeed } from "@/lib/mocks/team";
 import { ArrowUpRight, Save } from "lucide-react";
 import { DashboardDialogs } from "@/components/DashboardDialogs";
 import { notionConfig } from "@/lib/mocks/notion";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -152,6 +158,36 @@ async function isFeatureEnabled(flag: string): Promise<boolean> {
   return process.env[`FF_${flag.toUpperCase()}`] === "true";
 }
 
+/**
+ * Fetches glossary term definitions from the Notion API.
+ *
+ * In production this would query a Notion database via
+ * POST /v1/databases/{database_id}/query using the workspace
+ * connection configured in notionConfig.  The scaffold has no
+ * real third-party SDKs, so the call is mocked.
+ */
+async function fetchNotionTermDefinitions(): Promise<Record<string, string>> {
+  const databaseId = `${notionConfig.workspaceId}:glossary`;
+
+  // Mock payload that mirrors the shape a real Notion integration returns.
+  const glossary: Record<string, string> = {
+    "Monthly Recurring Revenue":
+      "The predictable revenue earned each month from active subscriptions. Also known as MRR.",
+    "Active Customers":
+      "Customers who logged in or performed a meaningful action within the current billing period.",
+    "Trial Conversions":
+      "The percentage of free-trial users who convert to a paid plan before the trial expires.",
+    "Churn Rate":
+      "The percentage of customers who cancel or do not renew their subscription in a given period.",
+  };
+
+  console.log(
+    `[notion_api] Fetched ${Object.keys(glossary).length} term definitions from database ${databaseId}`,
+  );
+
+  return glossary;
+}
+
 async function saveFilterToNotion(formData: FormData) {
   "use server";
 
@@ -183,6 +219,10 @@ async function saveFilterToNotion(formData: FormData) {
 
 export default async function DashboardPage() {
   const notionFilterSave = await isFeatureEnabled("notion_filter_save_minimal");
+  const tooltipOverlay = await isFeatureEnabled("dashboard_tooltip_overlay");
+  const termDefinitions = tooltipOverlay
+    ? await fetchNotionTermDefinitions()
+    : {};
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
@@ -218,26 +258,65 @@ export default async function DashboardPage() {
 
       {/* KPI Strip */}
       <ProbeTracked changeId="dashboard-kpis">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpis.map((kpi) => (
-            <Card key={kpi.label} className="border shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-sm)] transition-shadow">
-              <CardContent className="p-5">
-                <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                <p className="mt-1 font-mono tabular-nums text-2xl font-semibold">{kpi.value}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-xs">
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full"
-                      style={{ backgroundColor: kpi.churnGreen ? "oklch(0.65 0.15 145)" : kpi.positive ? "oklch(0.65 0.15 145)" : "oklch(0.55 0.20 25)" }}
-                    />
-                    <span className="text-muted-foreground">{kpi.delta}</span>
-                  </span>
-                  <Sparkline data={kpi.sparkline} positive={!kpi.churnGreen && kpi.positive} />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <TooltipProvider>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpis.map((kpi) => {
+              const definition = tooltipOverlay
+                ? termDefinitions[kpi.label]
+                : undefined;
+
+              return (
+                <Card
+                  key={kpi.label}
+                  className="border shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-sm)] transition-shadow"
+                >
+                  <CardContent className="p-5">
+                    {definition ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          className="text-xs text-muted-foreground cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-2 bg-transparent border-0 p-0 text-left font-[inherit]"
+                        >
+                          {kpi.label}
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-[220px]">
+                          {definition}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {kpi.label}
+                      </p>
+                    )}
+                    <p className="mt-1 font-mono tabular-nums text-2xl font-semibold">
+                      {kpi.value}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="flex items-center gap-1 text-xs">
+                        <span
+                          className="inline-block h-1.5 w-1.5 rounded-full"
+                          style={{
+                            backgroundColor: kpi.churnGreen
+                              ? "oklch(0.65 0.15 145)"
+                              : kpi.positive
+                                ? "oklch(0.65 0.15 145)"
+                                : "oklch(0.55 0.20 25)",
+                          }}
+                        />
+                        <span className="text-muted-foreground">
+                          {kpi.delta}
+                        </span>
+                      </span>
+                      <Sparkline
+                        data={kpi.sparkline}
+                        positive={!kpi.churnGreen && kpi.positive}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </TooltipProvider>
       </ProbeTracked>
 
       {/* Revenue Chart + Top Integrations */}
