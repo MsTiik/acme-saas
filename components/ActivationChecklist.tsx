@@ -99,11 +99,8 @@ const enterpriseSteps: Step[] = [
 
 type WidgetLayout = "list" | "grid";
 
-async function isFeatureEnabled(flag: string): Promise<boolean> {
-  return (
-    typeof window !== "undefined" &&
-    process.env[`NEXT_PUBLIC_FF_${flag.toUpperCase()}`] === "true"
-  );
+async function isFeatureEnabled(_flag: string): Promise<boolean> {
+  return process.env.NEXT_PUBLIC_FF_WIDGET_CUSTOMIZATION_ENABLED === "true";
 }
 
 function logNotionActivity(activity: string) {
@@ -205,30 +202,32 @@ export default function ActivationChecklist({
         if (swapIdx < 0 || swapIdx >= prev.length) return prev;
         const next = [...prev];
         [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-        trackEvent("widget_customization_reorder", {
-          stepId,
-          direction,
-          newIndex: swapIdx,
-        });
         return next;
+      });
+      trackEvent("widget_customization_reorder", {
+        stepId,
+        direction,
       });
     },
     [],
   );
 
   const toggleVisibility = useCallback((stepId: number) => {
+    const wasHidden = hiddenSteps.has(stepId);
     setHiddenSteps((prev) => {
       const next = new Set(prev);
       if (next.has(stepId)) {
         next.delete(stepId);
-        trackEvent("widget_customization_show", { stepId });
       } else {
         next.add(stepId);
-        trackEvent("widget_customization_hide", { stepId });
       }
       return next;
     });
-  }, []);
+    trackEvent(
+      wasHidden ? "widget_customization_show" : "widget_customization_hide",
+      { stepId },
+    );
+  }, [hiddenSteps]);
 
   const resetCustomization = useCallback(() => {
     setStepOrder(defaultSteps.map((s) => s.id));
@@ -239,12 +238,10 @@ export default function ActivationChecklist({
   }, [enterpriseEnabled]);
 
   const toggleLayout = useCallback(() => {
-    setLayout((prev) => {
-      const next = prev === "list" ? "grid" : "list";
-      trackEvent("widget_customization_layout_change", { layout: next });
-      return next;
-    });
-  }, []);
+    const next = layout === "list" ? "grid" : "list";
+    setLayout(next);
+    trackEvent("widget_customization_layout_change", { layout: next });
+  }, [layout]);
 
   // --- Render helpers ---
   function renderStepCard(step: Step) {
