@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  FolderKanban,
   Users,
+  Activity,
   CreditCard,
   Plug,
   Rocket,
@@ -26,7 +28,9 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/customers", label: "Customers", icon: Users },
+  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/integrations", label: "Integrations", icon: Plug },
   { href: "/onboarding", label: "Onboarding", icon: Rocket },
